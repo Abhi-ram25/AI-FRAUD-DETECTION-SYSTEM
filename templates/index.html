@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Fraud Detection System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,sans-serif;background:#07101d;color:#e5eef9}
+header{padding:18px 28px;background:#0b1626;border-bottom:1px solid #20314a;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+.logo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#2563eb,#38bdf8);font-weight:800}
+h1{font-size:1.25rem}.sub{font-size:.72rem;color:#7f95ac;margin-top:3px}.live{margin-left:auto;color:#4ade80;font-size:.75rem;font-weight:700}
+.container{max-width:1350px;margin:auto;padding:24px}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:18px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px}
+.card,.stat{background:linear-gradient(145deg,#101c2d,#0d1725);border:1px solid #1d304a;border-radius:14px}.card{padding:20px}.stat{padding:18px;border-top:3px solid #38bdf8}.stat.red{border-color:#f87171}.stat.green{border-color:#4ade80}.stat.yellow{border-color:#fbbf24}
+.label{font-size:.68rem;color:#7187a0;text-transform:uppercase;font-weight:800}.value{font-size:1.65rem;font-weight:800;margin-top:7px}.small{font-size:.68rem;color:#506983;margin-top:4px}
+.title{font-size:.9rem;font-weight:800;border-bottom:1px solid #1d304a;padding-bottom:12px;margin-bottom:15px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}.tab{padding:9px 13px;border-radius:8px;border:1px solid #243953;background:#09121f;color:#91a5ba;font-weight:700;cursor:pointer}.tab.active{background:linear-gradient(135deg,#2563eb,#0284c7);color:#fff}
+.mode{display:none}.mode.active{display:block}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.field{display:flex;flex-direction:column;gap:5px}.field label{font-size:.65rem;color:#7187a0;text-transform:uppercase;font-weight:800}input{background:#070d16;color:#e5eef9;border:1px solid #243953;border-radius:8px;padding:10px;width:100%}
+.btn{width:100%;padding:11px;border:0;border-radius:9px;background:linear-gradient(135deg,#2563eb,#0ea5e9);color:white;font-weight:800;margin-top:11px;cursor:pointer}.btn.alt{background:#101c2d;border:1px solid #263b57;color:#9eb1c5}.note{font-size:.68rem;color:#607891;line-height:1.5;margin-top:9px}
+.result{display:none;margin-top:15px;padding:17px;border-radius:11px;text-align:center}.fraud{background:#450a0a66;border:1px solid #ef4444}.legit{background:#052e1c66;border:1px solid #22c55e}.review{background:#42200666;border:1px solid #f59e0b}.rtitle{font-size:1.2rem;font-weight:800}.rsub{font-size:.72rem;color:#8ea2b8;margin:6px 0 14px}.risk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.riskbox{background:#060b14aa;border:1px solid #20314a;border-radius:8px;padding:9px}.riskbox span{display:block;font-size:.6rem;color:#678099;text-transform:uppercase}.riskbox b{font-size:.9rem;display:block;margin-top:3px}.high{color:#f87171}.medium{color:#fbbf24}.low{color:#4ade80}
+.feature-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:330px;overflow:auto}.feature-grid input{padding:8px;font-size:.75rem}
+.drop{padding:24px;border:1px dashed #315171;border-radius:10px;text-align:center;color:#7890aa}.loading{display:none;text-align:center;color:#38bdf8;padding:10px;font-size:.75rem}
+table{width:100%;border-collapse:collapse;font-size:.74rem}th,td{padding:9px;border-bottom:1px solid #17273c;text-align:left}th{color:#8ba0b7;font-size:.62rem;text-transform:uppercase;background:#070d16}.badge{padding:3px 7px;border-radius:20px;font-size:.6rem;font-weight:800}.bf{background:#7f1d1d55;color:#fca5a5}.bl{background:#14532d55;color:#86efac}.wrap{overflow:auto}
+footer{text-align:center;padding:24px;color:#425972;font-size:.7rem;border-top:1px solid #17273c}
+@media(max-width:950px){.g4,.g3{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}.feature-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:600px){.g4,.g3,.grid,.risk{grid-template-columns:1fr}.feature-grid{grid-template-columns:1fr 1fr}.container{padding:13px}header{padding:13px 16px}}
+</style>
+</head>
+<body>
+<header><div class="logo">FD</div><div><h1>AI Fraud Detection System</h1><div class="sub">Real-time fraud risk analysis • Flask • Machine Learning • 30-feature pipeline</div></div><div class="live">● SYSTEM LIVE</div></header>
+<div class="container">
+
+<div class="g4">
+<div class="stat"><div class="label">Total Transactions</div><div class="value" id="total">—</div><div class="small">Dataset</div></div>
+<div class="stat red"><div class="label">Fraud Cases</div><div class="value" id="fraud">—</div><div class="small" id="fraudPct">—</div></div>
+<div class="stat green"><div class="label">Legitimate Cases</div><div class="value" id="legit">—</div><div class="small">Dataset records</div></div>
+<div class="stat yellow"><div class="label">Selected Model</div><div class="value" id="model" style="font-size:1.1rem">Loading</div><div class="small" id="threshold">Threshold: —</div></div>
+</div>
+
+<div class="g2">
+<div class="card">
+<div class="title">Transaction Analysis</div>
+<div class="tabs">
+<button class="tab active" onclick="mode('demo',this)">Demo</button>
+<button class="tab" onclick="mode('csv',this)">CSV Batch</button>
+<button class="tab" onclick="mode('advanced',this)">Advanced</button>
+</div>
+
+<div id="demo" class="mode active">
+<div class="field"><label>Dataset Transaction ID</label><input id="demoId" type="number" min="0" placeholder="Example: 100"></div>
+<button class="btn alt" onclick="randomDemo()">Generate Random Transaction</button>
+<button class="btn" onclick="demoPredict()">Analyze Transaction</button>
+<div class="note">Demo mode obtains the complete Time + V1–V28 + Amount vector from the real dataset. Missing V-features are never silently replaced with zero.</div>
+</div>
+
+<div id="csv" class="mode">
+<div class="drop"><b>Upload CSV</b><div class="note">Required columns: Time, V1–V28, Amount</div><input id="csvFile" type="file" accept=".csv"></div>
+<button class="btn" onclick="batchPredict()">Analyze CSV</button>
+</div>
+
+<div id="advanced" class="mode">
+<div class="note">All 30 model inputs are required. V1–V28 are anonymized PCA features.</div>
+<div class="feature-grid" id="features"></div>
+<button class="btn" onclick="advancedPredict()">Analyze Complete Transaction</button>
+</div>
+
+<div class="loading" id="loading">Processing through preprocessing pipeline and ML model...</div>
+<div class="result" id="result"></div>
+</div>
+
+<div class="card"><div class="title">Dataset Distribution</div><canvas id="donut"></canvas><div style="height:18px"></div><div class="title">Average Amount</div><canvas id="amountChart"></canvas></div>
+</div>
+
+<div class="g3">
+<div class="card"><div class="title">Model Metrics</div><div class="grid" id="metrics"></div></div>
+<div class="card"><div class="title">Live Session Predictions</div><canvas id="session"></canvas></div>
+<div class="card"><div class="title">Risk Engine</div><div class="note" style="font-size:.8rem;line-height:2"><span class="low">● LOW</span> → APPROVE<br><span class="medium">● MEDIUM</span> → VERIFY<br><span class="high">● HIGH</span> → BLOCK</div><div class="note">The deployed fraud threshold is loaded from model metadata.</div></div>
+</div>
+
+<div class="g2">
+<div class="card"><div class="title">Confusion Matrix</div><img src="/static/confusion_matrix.png" style="width:100%;border-radius:9px"></div>
+<div class="card"><div class="title">Feature Importance</div><img src="/static/feature_importance.png" style="width:100%;border-radius:9px"></div>
+</div>
+
+<div class="card" style="margin-bottom:18px"><div class="title">Model Comparison</div><div class="g2" style="margin-bottom:0"><canvas id="comparison"></canvas><div class="wrap"><table><thead><tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>ROC-AUC</th></tr></thead><tbody id="cmp"><tr><td colspan="6">Loading...</td></tr></tbody></table></div></div></div>
+
+<div class="card"><div class="title" style="display:flex;justify-content:space-between;align-items:center"><span>Recent Prediction History</span><span><button class="tab" onclick="loadHistory()">Refresh</button> <button class="tab" onclick="location.href='/export'">Export</button> <button class="tab" onclick="clearHistory()">Clear</button></span></div><div class="wrap"><table><thead><tr><th>ID</th><th>Time</th><th>Amount</th><th>Prediction</th><th>Fraud %</th><th>Risk</th><th>Decision</th></tr></thead><tbody id="history"><tr><td colspan="7">No predictions yet.</td></tr></tbody></table></div></div>
+</div>
+<footer>AI Fraud Detection System • Python • Flask • Scikit-learn • SMOTE • Random Forest / XGBoost • College Project</footer>
+
+<script>
+const F=['Time',...Array.from({length:28},(_,i)=>'V'+(i+1)),'Amount'];let session={legit:0,fraud:0},donut,amountChart,sessionChart,cmpChart;
+function mode(id,b){document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');b.classList.add('active')}
+function loadFeatures(){document.getElementById('features').innerHTML=F.map(f=>`<div class="field"><label>${f}</label><input id="a_${f}" type="number" step="any" value="0"></div>`).join('')}
+function loading(x){document.getElementById('loading').style.display=x?'block':'none'}
+function show(d){
+ const r=document.getElementById('result'),risk=(d.risk_level||'').toLowerCase(),fraud=Number(d.prediction)===1;
+ r.style.display='block';r.className='result '+(risk==='high'?'fraud':risk==='medium'?'review':'legit');
+ r.innerHTML=`<div class="rtitle">${fraud?'🚨 FRAUDULENT TRANSACTION':'🟢 LEGITIMATE TRANSACTION'}</div>
+ <div class="rsub">${d.transaction_id||'Analysis complete'} • ${d.model||'ML Model'}</div>
+ <div style="text-align:left;font-size:.7rem">Fraud Probability <b style="float:right">${d.fraud_probability}%</b><div style="height:8px;background:#050a12;border-radius:20px;margin-top:5px"><div style="height:100%;width:${d.fraud_probability}%;background:#f87171;border-radius:20px"></div></div>
+ Legitimate Probability <b style="float:right;margin-top:10px">${d.legit_probability}%</b><div style="height:8px;background:#050a12;border-radius:20px;margin-top:28px"><div style="height:100%;width:${d.legit_probability}%;background:#4ade80;border-radius:20px"></div></div></div>
+ <div class="risk"><div class="riskbox"><span>Risk Score</span><b>${d.risk_score}/100</b></div><div class="riskbox"><span>Risk Level</span><b class="${risk}">${d.risk_level}</b></div><div class="riskbox"><span>Decision</span><b>${d.decision}</b></div></div>
+ <div class="note">Fraud threshold: ${d.threshold??'—'}%</div>`;
+ fraud?session.fraud++:session.legit++;sessionChart.data.datasets[0].data=[session.legit,session.fraud];sessionChart.update();loadHistory()
+}
+async function demoPredict(){let id=document.getElementById('demoId').value;if(id===''){alert('Enter a transaction ID');return}loading(true);try{let r=await fetch('/demo_predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transaction_id:Number(id)})}),d=await r.json();if(!r.ok)throw Error(d.message||d.error);show(d)}catch(e){alert(e.message)}finally{loading(false)}}
+async function randomDemo(){try{let d=await(await fetch('/demo_random')).json();if(d.status!=='success')throw Error(d.message);document.getElementById('demoId').value=d.transaction_id;demoPredict()}catch(e){alert(e.message)}}
+async function batchPredict(){let f=document.getElementById('csvFile').files[0];if(!f){alert('Choose a CSV file');return}let fd=new FormData();fd.append('file',f);loading(true);try{let r=await fetch('/batch_predict',{method:'POST',body:fd}),d=await r.json();if(!r.ok)throw Error(d.message||d.error);let x=document.getElementById('result');x.style.display='block';x.className='result '+(d.high_risk_count?'fraud':'legit');x.innerHTML=`<div class="rtitle">📊 BATCH ANALYSIS COMPLETE</div><div class="risk"><div class="riskbox"><span>Total</span><b>${d.total}</b></div><div class="riskbox"><span>Fraud</span><b class="high">${d.fraud_count}</b></div><div class="riskbox"><span>Legitimate</span><b class="low">${d.legit_count}</b></div></div><div class="risk"><div class="riskbox"><span>High Risk</span><b class="high">${d.high_risk_count}</b></div><div class="riskbox"><span>Medium</span><b class="medium">${d.medium_risk_count}</b></div><div class="riskbox"><span>Low</span><b class="low">${d.low_risk_count}</b></div></div>`}catch(e){alert(e.message)}finally{loading(false)}}
+async function advancedPredict(){let p={};for(const f of F){let v=document.getElementById('a_'+f).value;if(v===''){alert('Enter '+f);return}p[f]=Number(v)}loading(true);try{let r=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}),d=await r.json();if(!r.ok)throw Error(d.message||d.error);show(d)}catch(e){alert(e.message)}finally{loading(false)}}
+async function loadStats(){try{let d=await(await fetch('/stats')).json();document.getElementById('total').textContent=Number(d.total_transactions||0).toLocaleString();document.getElementById('fraud').textContent=Number(d.fraud_count||0).toLocaleString();document.getElementById('legit').textContent=Number(d.legit_count||0).toLocaleString();document.getElementById('fraudPct').textContent=(d.fraud_percentage||0)+'% of total';donut.data.datasets[0].data=[d.legit_count||0,d.fraud_count||0];donut.update();amountChart.data.datasets[0].data=[d.avg_legit_amount||0,d.avg_fraud_amount||0];amountChart.update()}catch(e){console.log(e)}}
+async function loadModel(){try{let d=await(await fetch('/model_info')).json();document.getElementById('model').textContent=d.model||'Unknown';document.getElementById('threshold').textContent='Threshold: '+(d.fraud_threshold_percentage??'—')+'%';let m=d.metrics||{},keys=[['ROC-AUC','roc_auc'],['PR-AUC','pr_auc'],['Precision','precision'],['Recall','recall'],['F1','f1'],['Accuracy','accuracy']];document.getElementById('metrics').innerHTML=keys.map(x=>`<div class="riskbox"><span>${x[0]}</span><b>${m[x[1]]===undefined?'—':(Number(m[x[1]])<=1?Number(m[x[1]])*100:Number(m[x[1]])).toFixed(2)}%</b></div>`).join('')}catch(e){console.log(e)}}
+async function loadComparison(){try{let d=await(await fetch('/model_comparison')).json(),n=Object.keys(d||{});if(!n.length)return;document.getElementById('cmp').innerHTML=n.map(x=>`<tr><td><b>${x}</b></td><td>${d[x].accuracy}%</td><td>${d[x].precision}%</td><td>${d[x].recall}%</td><td>${d[x].f1}%</td><td>${d[x].roc_auc}%</td></tr>`).join('');cmpChart=new Chart(document.getElementById('comparison'),{type:'bar',data:{labels:n,datasets:[{data:n.map(x=>d[x].roc_auc),backgroundColor:['#38bdf8','#4ade80','#fbbf24','#a78bfa'],borderRadius:8}]},options:{plugins:{legend:{display:false}},scales:{y:{min:70,max:100,ticks:{color:'#9db0c5',callback:v=>v+'%'},grid:{color:'#1d304a'}},x:{ticks:{color:'#9db0c5'},grid:{display:false}}}}})}catch(e){console.log(e)}}
+async function loadHistory(){try{let a=await(await fetch('/history')).json();document.getElementById('history').innerHTML=a.length?a.slice(0,20).map(r=>`<tr><td>${r.transaction_id||''}</td><td>${r.timestamp||''}</td><td>${Number(r.amount||0).toFixed(2)}</td><td><span class="badge ${String(r.prediction||'').includes('FRAUD')?'bf':'bl'}">${r.prediction||''}</span></td><td>${r.fraud_prob??''}%</td><td class="${String(r.risk_level||'').toLowerCase()}">${r.risk_level||''}</td><td>${r.decision||''}</td></tr>`).join(''):'<tr><td colspan="7">No predictions yet.</td></tr>'}catch(e){console.log(e)}}
+async function clearHistory(){if(!confirm('Clear prediction history?'))return;await fetch('/history/clear',{method:'POST'});loadHistory()}
+function charts(){donut=new Chart(document.getElementById('donut'),{type:'doughnut',data:{labels:['Legitimate','Fraudulent'],datasets:[{data:[1,1],backgroundColor:['#22c55e','#ef4444']}]},options:{cutout:'68%',plugins:{legend:{position:'bottom',labels:{color:'#cbd5e1'}}}}});amountChart=new Chart(document.getElementById('amountChart'),{type:'bar',data:{labels:['Legitimate','Fraudulent'],datasets:[{data:[0,0],backgroundColor:['#22c55ecc','#ef4444cc'],borderRadius:8}]},options:{plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#9db0c5'},grid:{color:'#1d304a'}},x:{ticks:{color:'#9db0c5'},grid:{display:false}}}}});sessionChart=new Chart(document.getElementById('session'),{type:'bar',data:{labels:['Legitimate','Fraudulent'],datasets:[{data:[0,0],backgroundColor:['#22c55ecc','#ef4444cc'],borderRadius:8}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{color:'#9db0c5',stepSize:1},grid:{color:'#1d304a'}},x:{ticks:{color:'#9db0c5'},grid:{display:false}}}}})}
+loadFeatures();charts();loadStats();loadModel();loadComparison();loadHistory();
+</script>
+</body>
+</html>
