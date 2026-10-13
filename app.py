@@ -3,7 +3,9 @@
 # app.py (WITH ALL 4 EXTENSIONS)
 # ============================================
 
-from flask import Flask, render_template, request, jsonify, make_response
+from unittest import result
+
+from flask import Flask, render_template, request, jsonify, make_response, redirect, url_for, session, flash
 import numpy as np
 import pandas as pd
 import joblib
@@ -12,6 +14,9 @@ import csv
 import io
 import os
 import uuid
+import sqlite3
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 # ============================================================
@@ -19,20 +24,74 @@ from datetime import datetime
 # ============================================================
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-this-secret-key")
+if app.secret_key == "dev-only-change-this-secret-key":
+    app.logger.warning("Using development Flask secret key; set FLASK_SECRET_KEY before deployment.")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    # Set COOKIE_SECURE=1 only when serving the app over HTTPS.
+    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "0") == "1",
+)
+DATABASE_PATH = os.environ.get("FRAUD_DB_PATH", "data/users.db")
+
+def get_db():
+    os.makedirs(os.path.dirname(DATABASE_PATH) or ".", exist_ok=True)
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_auth_db():
+    with get_db() as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+
+init_auth_db()
+
+@app.before_request
+def require_login():
+    public_endpoints = {"login", "register", "logout", "static", "health"}
+    if request.endpoint in public_endpoints or request.endpoint is None:
+        return None
+    if not session.get("user_id"):
+        if request.path.startswith("/api/") or request.is_json or request.path in {"/predict", "/demo_predict", "/batch_predict", "/history/clear"}:
+            return jsonify({"error": "Authentication required. Please log in."}), 401
+        return redirect(url_for("login", next=request.path))
+    return None
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
-MODEL_PATH = "model/fraud_model.pkl"
-PREPROCESSOR_PATH = "model/preprocessor.pkl"
-METADATA_PATH = "model/model_metadata.json"
+import os
 
-DATASET_PATH = "data/creditcard.csv"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-HISTORY_FILE = "static/prediction_history.json"
-MODEL_COMPARISON_FILE = "static/model_comparison.json"
+MODEL_PATH = os.path.join(
+    BASE_DIR, "model", "fraud_model.pkl"
+)
+PREPROCESSOR_PATH = os.path.join(
+    BASE_DIR, "model", "preprocessor.pkl"
+)
+METADATA_PATH = os.path.join(
+    BASE_DIR, "model", "model_metadata.json"
+)
+DATASET_PATH = os.path.join(
+    BASE_DIR, "data", "creditcard.csv"
+)
+HISTORY_FILE = os.path.join(
+    BASE_DIR, "static", "prediction_history.json"
+)
+MODEL_COMPARISON_FILE = os.path.join(
+    BASE_DIR, "static", "model_comparison.json"
+)
 
+MAX_HISTORY = 100
 MAX_HISTORY = 100
 
 
@@ -165,58 +224,70 @@ print("=" * 65)
 
 
 # ============================================================
-# HISTORY FUNCTIONS
+# HISTORY FUNCTIONS (USER-SCOPED)
 # ============================================================
 
-def load_history():
-
-    if not os.path.exists(
-        HISTORY_FILE
-    ):
+def load_all_history():
+    """Load all stored records, including legacy records without an owner."""
+    if not os.path.exists(HISTORY_FILE):
         return []
-
     try:
-
-        with open(
-            HISTORY_FILE,
-            "r"
-        ) as file:
-
-            return json.load(file)
-
-    except Exception:
-
+        with open(HISTORY_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        return data if isinstance(data, list) else []
+    except (OSError, json.JSONDecodeError):
+        app.logger.exception("Could not read prediction history")
         return []
+
+
+def load_history(user_id=None):
+    """Return only records owned by the requested user.
+
+    Legacy records without user_id are intentionally hidden because their
+    owner cannot be established safely.
+    """
+    if user_id is None:
+        user_id = session.get("user_id")
+    if user_id is None:
+        return []
+    wanted_id = str(user_id)
+    return [
+        record for record in load_all_history()
+        if isinstance(record, dict)
+        and str(record.get("user_id", "")) == wanted_id
+    ]
 
 
 def save_to_history(record):
+    """Save a record under the currently authenticated user's ID."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        raise RuntimeError("Cannot save a prediction without an authenticated user.")
 
-    history = load_history()
+    all_history = load_all_history()
+    owned_record = dict(record)
+    owned_record["user_id"] = int(user_id)
+    all_history.insert(0, owned_record)
 
-    history.insert(
-        0,
-        record
-    )
-
-    history = history[
-        :MAX_HISTORY
+    # Keep up to MAX_HISTORY records per user without deleting other users'
+    # records or old records whose owner is unknown.
+    other_records = [
+        item for item in all_history
+        if not isinstance(item, dict)
+        or str(item.get("user_id", "")) != str(user_id)
     ]
+    user_records = [
+        item for item in all_history
+        if isinstance(item, dict)
+        and str(item.get("user_id", "")) == str(user_id)
+    ][:MAX_HISTORY]
+    combined = user_records + other_records
 
-    os.makedirs(
-        "static",
-        exist_ok=True
-    )
-
-    with open(
-        HISTORY_FILE,
-        "w"
-    ) as file:
-
-        json.dump(
-            history,
-            file,
-            indent=2
-        )
+    os.makedirs(os.path.dirname(HISTORY_FILE) or ".", exist_ok=True)
+    temp_path = HISTORY_FILE + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump(combined, file, indent=2)
+    os.replace(temp_path, HISTORY_FILE)
 
 
 # ============================================================
@@ -531,6 +602,67 @@ def predict_transaction(
 
 
 # ============================================================
+# AUTHENTICATION
+# ============================================================
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if session.get("user_id"):
+        return redirect(url_for("home"))
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        if not name or not email or not password:
+            flash("Please fill in every field.", "error")
+        elif len(password) < 8:
+            flash("Use a password with at least 8 characters.", "error")
+        elif password != confirm:
+            flash("Passwords do not match.", "error")
+        else:
+            try:
+                with get_db() as conn:
+                    cur = conn.execute(
+                        "INSERT INTO users(name,email,password_hash,created_at) VALUES(?,?,?,?)",
+                        (name, email, generate_password_hash(password), datetime.utcnow().isoformat(timespec="seconds") + "Z")
+                    )
+                    session.clear()
+                    session["user_id"] = cur.lastrowid
+                    session["user_name"] = name
+                    session["user_email"] = email
+                return redirect(url_for("home"))
+            except sqlite3.IntegrityError:
+                flash("An account with that email already exists.", "error")
+    return render_template("auth.html", mode="register")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("user_id"):
+        return redirect(url_for("home"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        with get_db() as conn:
+            user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if user and check_password_hash(user["password_hash"], password):
+            session.clear()
+            session["user_id"] = user["id"]
+            session["user_name"] = user["name"]
+            session["user_email"] = user["email"]
+            target = request.args.get("next", "")
+            if not target.startswith("/") or target.startswith("//"):
+                target = url_for("home")
+            return redirect(target)
+        flash("Invalid email or password.", "error")
+    return render_template("auth.html", mode="login")
+
+@app.route("/logout", methods=["POST", "GET"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+# ============================================================
 # HOME PAGE
 # ============================================================
 
@@ -841,26 +973,33 @@ def demo_predict():
         result[
             "status"
         ] = "success"
+        
+        result["status"] = "success"
 
-        return jsonify(
-            result
-        )
+        record = {
+            "transaction_id": f"DEMO-{transaction_id}",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "amount": round(float(transaction["Amount"]), 2),
+            "prediction": result["label"],
+            "fraud_prob": result["fraud_probability"],
+            "legit_prob": result["legit_probability"],
+            "risk_score": result["risk_score"],
+            "risk_level": result["risk_level"],
+            "decision": result["decision"],
+        }
+
+        save_to_history(record)
+
+        return jsonify(result)
 
     except Exception as e:
-
-        print(
-            f"Demo prediction error: {e}"
-        )
-
+        print(f"Demo prediction error: {e}")
         return jsonify({
-
-            "status":
-                "error",
-
-            "message":
-                str(e)
-
+            "status": "error",
+            "message": str(e)
         }), 500
+
+
 
 
 # ============================================================
@@ -941,10 +1080,7 @@ def demo_random():
     methods=["GET"]
 )
 def history():
-
-    return jsonify(
-        load_history()
-    )
+    return jsonify(load_history(session.get("user_id")))
 
 
 # ============================================================
@@ -956,39 +1092,32 @@ def history():
     methods=["POST"]
 )
 def clear_history():
-
     try:
-
-        with open(
-            HISTORY_FILE,
-            "w"
-        ) as file:
-
-            json.dump(
-                [],
-                file
+        user_id = session.get("user_id")
+        all_history = load_all_history()
+        remaining = [
+            record for record in all_history
+            if not (
+                isinstance(record, dict)
+                and str(record.get("user_id", "")) == str(user_id)
             )
+        ]
+
+        os.makedirs(os.path.dirname(HISTORY_FILE) or ".", exist_ok=True)
+        temp_path = HISTORY_FILE + ".tmp"
+        with open(temp_path, "w", encoding="utf-8") as file:
+            json.dump(remaining, file, indent=2)
+        os.replace(temp_path, HISTORY_FILE)
 
         return jsonify({
-
-            "status":
-                "success",
-
-            "message":
-                "Prediction history cleared."
-
+            "status": "success",
+            "message": "Your prediction history was cleared."
         })
-
-    except Exception as e:
-
+    except Exception:
+        app.logger.exception("Could not clear prediction history")
         return jsonify({
-
-            "status":
-                "error",
-
-            "message":
-                str(e)
-
+            "status": "error",
+            "message": "Could not clear your prediction history."
         }), 500
 
 

@@ -1,5 +1,14 @@
+﻿# Python environment and cache
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Secrets
 .env
-data/creditcard.csv
+.env.*
+
+# Local dataset, databases, and other data
+data/
+
+# Local prediction history
+static/prediction_history.json
