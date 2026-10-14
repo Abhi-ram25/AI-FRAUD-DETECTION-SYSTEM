@@ -12,3 +12,11 @@ data/
 
 # Local prediction history
 static/prediction_history.json
+
+# Local backup files — never commit
+app_backup*.py
+app_before_*.py
+prediction_history_backup.json
+users_backup*.db
+*.sqlite
+*.sqlite3
