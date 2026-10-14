@@ -229,23 +229,30 @@ print(
 print("\nLoading transaction dataset...")
 
 if os.path.exists(DATASET_PATH):
-
-    dataset_df = pd.read_csv(
-        DATASET_PATH
-    )
-
-    print(
-        f"âœ“ Dataset loaded: "
-        f"{len(dataset_df):,} transactions"
-    )
-
+    dataset_df = pd.read_csv(DATASET_PATH)
+    print(f"Dataset loaded: {len(dataset_df)} transactions")
 else:
-
     dataset_df = None
+    try:
+        import gdown
 
-    print(
-        "âš  Dataset not found."
-    )
+        os.makedirs(os.path.dirname(DATASET_PATH), exist_ok=True)
+
+        downloaded = gdown.download(
+            id="1j5LcWjgdOw7k990LnX5gjkpDm30r5eUs",
+            output=DATASET_PATH,
+            quiet=False
+        )
+
+        if downloaded:
+            dataset_df = pd.read_csv(DATASET_PATH)
+            print(f"Dataset downloaded: {len(dataset_df)} transactions")
+        else:
+            print("Dataset download failed.")
+
+    except Exception as e:
+        dataset_df = None
+        print(f"Dataset download error: {e}")
 
 
 print("\nSystem ready!")
