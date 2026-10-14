@@ -7,8 +7,10 @@ __pycache__/
 .env
 .env.*
 
+
 # Local dataset, databases, and other data
-data/
+data/*
+!data/creditcard.csv
 
 # Local prediction history
 static/prediction_history.json
